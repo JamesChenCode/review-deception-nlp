@@ -240,6 +240,3 @@ notebooks/**/*-checkpoint.ipynb
 config.local.yaml
 .env.local
 
-# Claude Code local files (agent settings / notes — never committed)
-.claude/
-CLAUDE.md
