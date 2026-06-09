@@ -10,6 +10,8 @@ from src import clean
 
 def test_clean_text_entities_and_whitespace():
     assert clean.clean_text("Great   product &amp; value\n") == "Great product & value"
+    assert clean.clean_text("Great<br />product &amp; <b>value</b>") == "Great product & value"
+    assert clean.clean_text("&lt;br&gt;escaped tag") == "escaped tag"  # unescape-then-strip
     assert clean.clean_text("  ＡＢＣ  ") == "ABC"  # NFKC folds full-width to ASCII + trims
     assert clean.clean_text(None) == ""
     assert clean.clean_text(float("nan")) == ""

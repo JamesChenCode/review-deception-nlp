@@ -31,6 +31,7 @@ from .fallback_loader import REVIEW_COLUMNS
 LOGGER = utils.get_logger("review_deception.clean")
 
 _WHITESPACE = re.compile(r"\s+")
+_HTML_TAG = re.compile(r"<[^>]+>")
 
 _STRING_COLUMNS = (
     "review_id", "product_id", "product_category", "reviewer_id",
@@ -42,14 +43,20 @@ _STRING_COLUMNS = (
 # Scalar text helpers (pure)
 # ---------------------------------------------------------------------------
 def clean_text(text: object, lowercase: bool = False) -> str:
-    """Normalize one string: HTML-unescape, NFKC-normalize, collapse whitespace.
+    """Normalize one string: HTML-unescape, strip tags, NFKC, collapse whitespace.
 
-    >>> clean_text("Great   product &amp; value\\n")
+    Amazon review bodies contain ``<br />`` and other tags; we unescape entities
+    first (so ``&lt;br&gt;`` becomes a real tag), then strip tags, so they don't
+    leak into the text features as tokens like "br".
+
+    >>> clean_text("Great<br />product &amp; <b>value</b>")
     'Great product & value'
     """
     if text is None or (isinstance(text, float) and pd.isna(text)):
         return ""
-    s = unicodedata.normalize("NFKC", html.unescape(str(text)))
+    s = html.unescape(str(text))
+    s = _HTML_TAG.sub(" ", s)
+    s = unicodedata.normalize("NFKC", s)
     s = _WHITESPACE.sub(" ", s).strip()
     return s.lower() if lowercase else s
 
