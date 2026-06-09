@@ -120,8 +120,20 @@ data_source:
 
 | Source     | Module                | When to use                                              |
 |------------|-----------------------|---------------------------------------------------------|
-| `scrape`   | `src/scrape.py`       | Live collection (rate-limited; may be blocked by Amazon) |
-| `fallback` | `src/fallback_loader.py` | Documented, ToS-safe path for real analysis           |
+| `scrape`   | `src/scrape.py`       | Live Amazon scrape (rate-limited; **blocked by a bot wall** in practice) |
+| `fallback` | `src/fallback_loader.py` | Documented, ToS-safe Amazon Reviews 2023 research data |
+| `steam`    | `src/steam_collector.py` | **Self-collected** cross-platform data via Steam's public API |
+
+> **Self-collected data (note).** Amazon serves polite scrapers a JavaScript
+> anti-bot interstitial (`/_sec/verify`), so real Amazon reviews aren't
+> retrievable without circumventing it (out of scope). The genuinely
+> *self-collected* dataset therefore comes from the **Steam reviews public API**
+> (`src/steam_collector.py`): `steam_purchase` is a direct analog of Amazon's
+> "Verified Purchase" proxy, `received_for_free` flags incentivized reviews, and
+> the API exposes rich behavioral signals (author review count, games owned,
+> playtime). Collect with `python -m src.steam_collector --collect`; analysis in
+> `notebooks/09_steam_crossplatform.ipynb`. This makes the project genuinely
+> cross-platform (Amazon research data + self-collected Steam).
 
 A second source — **product metadata** (category, price, brand) — is joined
 onto reviews so the dataset is genuinely multi-source. _(Schema details land

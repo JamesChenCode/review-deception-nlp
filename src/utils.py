@@ -98,6 +98,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "sample_rows": 40000,
         "enabled": True,
     },
+    "steam": {
+        "appids": [730, 570, 1086940, 1245620, 413150],
+        "max_reviews_per_app": 700,
+        "language": "english",
+        "filter": "recent",
+        "purchase_type": "all",
+        "min_delay_seconds": 1.0,
+        "max_delay_seconds": 2.5,
+    },
     "logging": {
         "level": "INFO",
         "format": "%(asctime)s | %(name)s | %(levelname)s | %(message)s",

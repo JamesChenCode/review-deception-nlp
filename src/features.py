@@ -46,6 +46,11 @@ NUMERIC_FEATURES: tuple[str, ...] = (
     "product_rating_skew", "product_verified_ratio",
     "reviewer_burst_max", "product_burst_max",
     "helpful_ratio", "helpful_votes_pz", "max_intra_product_similarity",
+    # Steam-specific behavioral fields (only present for the Steam source; the
+    # design matrix includes a column only when it exists, so this is a no-op for
+    # Amazon data — see assemble_behavioral_features).
+    "author_num_reviews", "author_num_games_owned", "author_playtime_forever",
+    "weighted_vote_score", "votes_funny", "comment_count",
 )
 
 

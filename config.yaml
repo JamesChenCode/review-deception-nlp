@@ -97,6 +97,20 @@ groundtruth:
   enabled: true                 # data downloaded + format confirmed in Step 5
 
 # -----------------------------------------------------------------------------
+# STEAM (self-collected cross-platform source; src/steam_collector.py)
+# Public review API. steam_purchase ~ "verified purchase" proxy; received_for_free
+# flags incentivized reviews. Collect with: python -m src.steam_collector --collect
+# -----------------------------------------------------------------------------
+steam:
+  appids: [730, 570, 1086940, 1245620, 413150]   # CS2, Dota2, BG3, Elden Ring, Stardew
+  max_reviews_per_app: 700
+  language: english
+  filter: recent
+  purchase_type: all            # all | steam | non_steam_purchase
+  min_delay_seconds: 1.0        # polite delay between API calls
+  max_delay_seconds: 2.5
+
+# -----------------------------------------------------------------------------
 # FEATURE ENGINEERING  (src/features.py — Step 3)
 # -----------------------------------------------------------------------------
 features:
