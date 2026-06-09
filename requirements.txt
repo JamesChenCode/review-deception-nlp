@@ -1,0 +1,65 @@
+# =============================================================================
+# requirements.txt — direct dependencies (TARGET: Python 3.14)
+#
+# These are lower-bound constraints chosen to resolve to the current 3.14-wheel
+# releases. For EXACT reproduction use the generated lock file:
+#     pip install -r requirements.lock
+#
+# Setup:
+#     python3 -m venv .venv && source .venv/bin/activate
+#     pip install -r requirements.txt
+#     python -m nltk.downloader vader_lexicon punkt punkt_tab stopwords
+#     pip freeze > requirements.lock     # refresh the lock after any change
+#
+# The collection pipeline (scrape/fallback) also runs on the BARE stdlib for
+# offline dry runs — no install required (see `python -m src.scrape --dry-run`).
+# =============================================================================
+
+# --- Core scientific stack -------------------------------------------------
+numpy>=2.1
+pandas>=2.3
+scipy>=1.14
+
+# --- Visualization ---------------------------------------------------------
+matplotlib>=3.9
+seaborn>=0.13
+plotly>=5.24
+
+# --- Machine learning ------------------------------------------------------
+# In-scope: KNN, random forest, K-means, hierarchical clustering, PCA,
+# cross-validation, grid search, ROC / precision-recall evaluation.
+scikit-learn>=1.6
+
+# --- NLP -------------------------------------------------------------------
+# In-scope: bag-of-words, TF-IDF / vector-space model, n-grams, sentiment.
+# TF-IDF & BoW come from scikit-learn; nltk provides VADER + tokenizers.
+nltk>=3.9
+
+# --- Scraping (primary data-collection path) -------------------------------
+# Optional at runtime: scrape.py falls back to stdlib urllib/html when absent.
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.3
+
+# --- Network analysis ------------------------------------------------------
+# Product-reviewer graph + unsupervised suspicious-product cluster detection.
+networkx>=3.3
+
+# --- Config / utilities ----------------------------------------------------
+PyYAML>=6.0.2
+tqdm>=4.66
+
+# --- Notebooks -------------------------------------------------------------
+jupyterlab>=4.2
+ipykernel>=6.29
+
+# --- Testing ---------------------------------------------------------------
+pytest>=8.3
+
+# ---------------------------------------------------------------------------
+# OPTIONAL — geospatial extras (HEAVY; pull in GDAL/GEOS native libs).
+# The geo chapter's default backend is Plotly choropleths, which need NONE of
+# these. Uncomment + `pip install` ONLY if you choose the geopandas backend.
+#   geopandas>=1.0
+#   shapely>=2.0
+# ---------------------------------------------------------------------------

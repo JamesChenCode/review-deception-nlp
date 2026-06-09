@@ -216,3 +216,30 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---------------------------------------------------------------------------
+# review-deception-nlp — project-specific
+# ---------------------------------------------------------------------------
+# Data is NEVER committed (size + licensing). Keep the directory structure via
+# the tracked .gitkeep files, but ignore everything else inside data/.
+data/**
+!data/**/
+!data/**/.gitkeep
+
+# Scraper artifacts / caches / checkpoints
+logs/**
+!logs/.gitkeep
+*.html.gz
+*.jsonl
+*.parquet
+
+# Notebook scratch
+notebooks/**/*-checkpoint.ipynb
+
+# Local config overrides (keep the committed config.yaml; ignore personal ones)
+config.local.yaml
+.env.local
+
+# Claude Code local files (agent settings / notes — never committed)
+.claude/
+CLAUDE.md

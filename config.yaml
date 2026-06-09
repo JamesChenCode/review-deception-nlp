@@ -1,0 +1,147 @@
+# =============================================================================
+# config.yaml — central configuration for review-deception-nlp
+# -----------------------------------------------------------------------------
+# All paths are relative to the repository root unless absolute.
+# NOTHING SECRET belongs in this file (no cookies, tokens, or credentials).
+# Personal overrides go in config.local.yaml (gitignored).
+# =============================================================================
+
+project:
+  name: review-deception-nlp
+  random_seed: 42            # Reused across numpy / sklearn / scrape jitter for reproducibility.
+
+# -----------------------------------------------------------------------------
+# DATA SOURCE SWITCH
+# `source` selects where review data comes from. Downstream code (clean,
+# features, models) is IDENTICAL regardless of source because every loader
+# emits the SAME unified schema (see src/fallback_loader.py docstring).
+#   - "scrape"   : live polite scraper (src/scrape.py). May be blocked by Amazon.
+#   - "fallback" : McAuley/UCSD + Hou et al. 2024 research dataset (src/fallback_loader.py).
+# The scraper DEGRADES GRACEFULLY to "fallback" on repeated failure when
+# `auto_fallback: true`.
+# -----------------------------------------------------------------------------
+data_source:
+  source: fallback          # one of: scrape | fallback
+  auto_fallback: true       # if scraping fails past max_failures, switch to fallback
+  max_failures: 5
+
+paths:
+  data_raw: data/raw
+  data_interim: data/interim
+  data_processed: data/processed
+  data_groundtruth: data/groundtruth
+  cache: data/raw/cache
+  checkpoints: data/raw/checkpoints
+  logs: logs
+
+# -----------------------------------------------------------------------------
+# SCRAPER SETTINGS  (used only when data_source.source == "scrape")
+# Polite-by-default. See README "Ethics & Legality".
+# -----------------------------------------------------------------------------
+scraper:
+  base_url: "https://www.amazon.com"
+  target_categories:        # human-readable labels -> resolved to queries in scrape.py
+    - electronics
+    - books
+    - home_kitchen
+  max_products_per_category: 50
+  max_reviews_per_product: 200
+  rate_limit:
+    min_delay_seconds: 3.0      # randomized inter-request delay, lower bound
+    max_delay_seconds: 7.0      # upper bound
+    jitter: true
+  retry:
+    max_attempts: 4
+    backoff_factor: 2.0         # exponential backoff base
+    backoff_max_seconds: 60
+    retry_on_status: [429, 500, 502, 503, 504]
+  caching:
+    enabled: true               # persist raw responses to paths.cache BEFORE parsing
+    ttl_days: 30
+  checkpointing:
+    enabled: true               # resume interrupted runs from paths.checkpoints
+    flush_every: 10             # write a checkpoint every N products
+  user_agents:                  # rotated per-request; expand as needed
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36"
+    - "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0"
+  respect_robots_txt: true
+
+# -----------------------------------------------------------------------------
+# FALLBACK DATASET  (used when data_source.source == "fallback")
+# McAuley/UCSD Amazon Reviews; default to the Hou et al. 2024 edition.
+# Files are NOT committed; see README for download instructions. The loader
+# only READS from data_raw; it never downloads without explicit action.
+# -----------------------------------------------------------------------------
+fallback:
+  dataset: amazon_reviews_2023        # amazon_reviews_2023 (Hou et al.) | amazon_reviews_2014 (McAuley)
+  categories:
+    - Electronics
+    - Books
+    - Home_and_Kitchen
+  reviews_filename_template: "{category}.jsonl"        # raw reviews per category
+  meta_filename_template: "meta_{category}.jsonl"      # product metadata (JOIN source #2)
+  sample_rows: null                    # null = all rows; integer to subsample for fast iteration
+
+# -----------------------------------------------------------------------------
+# GROUND-TRUTH VALIDATION  (Step 5; src/groundtruth_loader.py + notebook 07)
+# Hollenbeck et al. fake-review-buyer data. Column names are intentionally
+# NOT hardcoded here — confirm the repo's real file format/license first.
+# -----------------------------------------------------------------------------
+groundtruth:
+  source_repo: "https://github.com/bretthollenbeck/fake-reviews-data"   # MIT license
+  local_dir: data/groundtruth
+  filename: public_reviews_dataset_cleaned.csv   # 381,734 rows, 23 cols (confirmed)
+  label_strategy: primary       # primary | primary_or_deleted | deleted | labeled
+  sample_rows: 40000            # subsample for a tractable feature pipeline (null = all)
+  enabled: true                 # data downloaded + format confirmed in Step 5
+
+# -----------------------------------------------------------------------------
+# FEATURE ENGINEERING  (src/features.py — Step 3)
+# -----------------------------------------------------------------------------
+features:
+  text:
+    lowercase: true
+    min_token_len: 2
+    ngram_range: [1, 2]       # unigrams + bigrams
+    max_features: 5000
+    tfidf_min_df: 5
+    tfidf_max_df: 0.9
+    sentiment: vader          # nltk VADER (in-scope sentiment)
+  behavioral:
+    burst_window_days: 7      # review-burst detection window per reviewer/product
+    near_duplicate_threshold: 0.90   # cosine sim above which two reviews are "near-duplicate"
+    helpful_vote_smoothing: 1        # Laplace smoothing for helpful-vote ratios
+
+# -----------------------------------------------------------------------------
+# MODELING  (src/models.py — Step 4)
+# Proxy label = Amazon "Verified Purchase". THIS IS A WEAK PROXY for
+# trustworthiness (measures purchase verification, NOT ground-truth deception).
+# -----------------------------------------------------------------------------
+modeling:
+  proxy_label: verified_purchase     # weak proxy; validated against real labels in Step 5
+  test_size: 0.2
+  cv_folds: 5
+  scoring: roc_auc
+  knn:
+    n_neighbors_grid: [3, 5, 11, 21]
+  random_forest:
+    n_estimators_grid: [200, 400]
+    max_depth_grid: [null, 10, 20]
+  clustering:
+    kmeans_k_grid: [2, 3, 4, 5, 6]
+    hierarchical_linkage: ward
+  pca:
+    n_components: 2
+
+# -----------------------------------------------------------------------------
+# GEOSPATIAL  (optional; only if reviewer/product location is obtainable)
+# -----------------------------------------------------------------------------
+geo:
+  enabled: false
+  level: state                # state | country
+  backend: plotly             # plotly choropleth (no GDAL) | geopandas
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
