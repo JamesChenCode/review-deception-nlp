@@ -1,4 +1,10 @@
-"""Polite, robust Amazon review scraper — the PRIMARY data-collection path.
+"""Polite, robust Amazon review scraper (reference implementation).
+
+NOTE: in practice Amazon serves a JavaScript anti-bot interstitial, so this
+returns no real reviews. The project's *self-collected* dataset therefore comes
+from Steam's public API (:mod:`src.steam_collector`, which reuses this module's
+``RateLimiter`` / retry / ``DiskCache`` / ``CheckpointManager`` machinery). This
+module stays as a reference for polite, robust collection engineering.
 
 Architecture
 ------------

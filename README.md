@@ -1,11 +1,12 @@
 # review-deception-nlp
 
-**Analyzing deceptive / low-trust reviews on Amazon using NLP.**
+**Analyzing deceptive / low-trust reviews across platforms using NLP.**
 
 A reproducible data-science project that mines the linguistic and behavioral
-signatures of untrustworthy Amazon reviews, builds a "trust classifier," and
-then **stress-tests that classifier against a real labeled fake-review
-dataset** to see which signals actually hold up.
+signatures of untrustworthy reviews, builds a "trust classifier," and then
+**stress-tests it two ways**: against a real labeled fake-review dataset, and
+across **two platforms** — Amazon (research data) and **self-collected Steam**
+reviews (public API) — to see which signals actually hold up.
 
 > ⚠️ **Label honesty (read this first).** The primary label in this project is
 > Amazon's **"Verified Purchase"** flag, used as a **weak proxy** for review
@@ -36,6 +37,10 @@ a real ground-truth fake-review dataset, which of our signals actually survive
   windows?
 - Do suspicious products cluster together in a product–reviewer network,
   replicating the unsupervised finding from the fake-review literature?
+- **Cross-platform:** do the same signals distinguish verified from unverified
+  reviews on a *different* platform — self-collected **Steam**, where
+  `steam_purchase` is the proxy and `received_for_free` flags incentivized
+  reviews, and the API exposes richer behavioral signals (playtime, history)?
 
 ---
 
@@ -45,25 +50,28 @@ a real ground-truth fake-review dataset, which of our signals actually survive
 review-deception-nlp/
 ├── README.md                  # this file
 ├── ANALYSIS_PLAN.md           # maps each grading-rubric criterion -> where it's addressed
-├── config.yaml                # source switch, rate limits, paths, target categories
-├── requirements.txt           # pinned dependencies
+├── config.yaml                # source switch, rate limits, paths, categories, steam apps
+├── requirements.txt           # dependencies (requirements.lock = exact pinned set)
 ├── data/                      # ALL gitignored (only .gitkeep is tracked)
-│   ├── raw/                   # raw scraped HTML/JSON + cache/ + checkpoints/
-│   ├── interim/               # parsed-but-not-cleaned intermediate tables
+│   ├── raw/                   # raw responses + cache/ + checkpoints/; downloaded datasets
+│   ├── interim/               # intermediate tables (e.g. collected steam_reviews.pkl)
 │   ├── processed/             # analysis-ready feature tables
-│   └── groundtruth/           # Hollenbeck et al. labeled fake-review data (Step 5)
+│   └── groundtruth/           # Hollenbeck et al. labeled fake-review data
 ├── src/
-│   ├── scrape.py              # polite, robust Amazon scraper (PRIMARY path)
-│   ├── fallback_loader.py     # McAuley/UCSD + Hou et al. 2024 loader -> unified schema
-│   ├── groundtruth_loader.py  # labeled fake-review loader (Step 5)
+│   ├── scrape.py              # polite, robust Amazon scraper (blocked by Amazon's bot wall)
+│   ├── fallback_loader.py     # Amazon Reviews 2023 (Hou et al.) loader -> unified schema
+│   ├── steam_collector.py     # self-collected Steam reviews via public API -> unified schema
+│   ├── groundtruth_loader.py  # labeled fake-review loader (ground-truth validation)
 │   ├── clean.py               # pure cleaning/normalization functions
 │   ├── features.py            # TF-IDF, n-grams, sentiment, behavioral signals
 │   ├── models.py              # KNN, random forest, clustering, PCA + CV/grid/ROC/PR
 │   ├── network.py             # product-reviewer graph + suspicious-cluster detection
 │   ├── geo.py                 # optional choropleth / heatmap helpers
-│   └── viz.py                 # reusable labeled-plot helpers (consistent house style)
-├── notebooks/                 # narrative chapters 01..08 (see ANALYSIS_PLAN.md)
-└── tests/                     # pytest fixtures for cleaning + feature functions
+│   ├── viz.py                 # reusable labeled-plot helpers (consistent house style)
+│   └── utils.py               # config, logging, seeding, IDs, schema helpers
+├── notebooks/                 # chapters 01..09 (08 = story, 09 = Steam cross-platform)
+├── reports/                   # figures/ (PNG, poster-ready) + html/ (rendered notebooks)
+└── tests/                     # pytest for cleaning, features, loaders, models, network
 ```
 
 ---
@@ -71,15 +79,18 @@ review-deception-nlp/
 ## Setup
 
 ```bash
-# 1. Create and activate a virtual environment (Python 3.11 or 3.12)
+# 1. Create and activate a virtual environment (Python 3.11–3.14)
 python -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
 
-# 2. Install pinned dependencies
+# 2. Install dependencies (use requirements.lock for the exact pinned set)
 pip install -r requirements.txt
 
 # 3. Download NLTK data used for sentiment + tokenization
 python -m nltk.downloader vader_lexicon punkt punkt_tab stopwords
+
+# 4. Collect the self-collected Steam dataset (public API; ~3.5k reviews)
+python -m src.steam_collector --collect
 ```
 
 > The optional **geospatial** chapter can use Plotly choropleths (no extra
@@ -139,11 +150,22 @@ A second source — **product metadata** (category, price, brand) — is joined
 onto reviews so the dataset is genuinely multi-source. _(Schema details land
 in Step 2.)_
 
-### Downloading the fallback dataset
-Files are **not** committed. Download instructions, expected filenames, and
-sizes will be documented here in **Step 2** (the loader only *reads* from
-`data/raw/`; it never downloads anything without an explicit, confirmed
-action).
+### Getting the data
+Datasets are **not** committed (size + licensing). Loaders only *read* local
+files — nothing downloads automatically.
+
+- **Amazon Reviews 2023 (fallback):** drop a category's gzipped files into
+  `data/raw/`; the loader auto-detects any `*.jsonl.gz` present, so add more
+  categories freely. Smallest category example:
+  ```bash
+  base=https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw
+  curl -L "$base/review_categories/Subscription_Boxes.jsonl.gz" -o data/raw/Subscription_Boxes.jsonl.gz
+  curl -L "$base/meta_categories/meta_Subscription_Boxes.jsonl.gz" -o data/raw/meta_Subscription_Boxes.jsonl.gz
+  ```
+- **Steam (self-collected):** `python -m src.steam_collector --collect` — apps
+  listed under `steam.appids` in `config.yaml`; writes `data/interim/steam_reviews.pkl`.
+- **Ground-truth labels:** download the MIT-licensed CSV (see citation) into
+  `data/groundtruth/` as `public_reviews_dataset_cleaned.csv`.
 
 ---
 
@@ -157,16 +179,18 @@ action).
 
   | # | Notebook                     | Produces                                  |
   |---|------------------------------|-------------------------------------------|
-  | 01 | `01_collection`             | raw → unified review table                |
-  | 02 | `02_cleaning_eda`           | cleaned table + EDA                        |
-  | 03 | `03_features`               | TF-IDF / n-gram / sentiment / behavioral   |
-  | 04 | `04_modeling`               | trust classifier + ROC/PR evaluation       |
-  | 05 | `05_clustering_pca`         | review-style clusters + PCA views          |
-  | 06 | `06_geo`                    | optional choropleth / heatmap              |
-  | 07 | `07_groundtruth_validation` | proxy-vs-real-label comparison             |
-  | 08 | `08_story`                  | the assembled narrative for poster/talk    |
+  | 01 | `01_collection`             | raw → unified review table (Amazon)        |
+  | 02 | `02_cleaning_eda`           | cleaned table + EDA                         |
+  | 03 | `03_features`               | TF-IDF / n-gram / sentiment / behavioral    |
+  | 04 | `04_modeling`               | trust classifier + ROC/PR evaluation        |
+  | 05 | `05_clustering_pca`         | review-style clusters + PCA views           |
+  | 06 | `06_geo`                    | optional choropleth / heatmap (stub)        |
+  | 07 | `07_groundtruth_validation` | proxy-vs-real-label comparison              |
+  | 08 | `08_story`                  | the assembled narrative for poster/talk     |
+  | 09 | `09_steam_crossplatform`    | self-collected Steam + cross-platform compare |
 
-  _(Notebooks are stubbed in Step 4.)_
+  _All chapters except 06 (geo) are executed with embedded outputs; rendered
+  copies live in `reports/html/` and poster figures in `reports/figures/`._
 
 ---
 
@@ -184,6 +208,10 @@ action).
   which is published for research use and avoids ToS friction entirely. The
   scraper exists to demonstrate robust, ethical collection engineering; the
   `fallback` switch makes the analysis fully reproducible without it.
+- **Self-collected data uses a public API.** Amazon's bot wall makes polite
+  scraping infeasible, and circumventing it is out of scope — so the
+  *self-collected* dataset comes from Steam's **public** review API, used
+  politely (rate-limited, cached, checkpointed) and within its intended purpose.
 - **Weak-proxy honesty:** see the label caveat at the top of this README.
 
 ---
@@ -195,18 +223,24 @@ action).
 - **Amazon Reviews 2023 (newer edition)** — Hou, Y., Li, J., He, Z., Yan, A.,
   Chen, X., & McAuley, J. (2024). *Bridging Language and Items for Retrieval
   and Recommendation.* <https://amazon-reviews-2023.github.io/>
-- **Labeled fake-review data (Step 5)** — He, S., Hollenbeck, B., Overgoor, G.,
+- **Labeled fake-review data** — He, S., Hollenbeck, B., Overgoor, G.,
   Proserpio, D., & Tosyali, A. *Detecting fake-review buyers using network
-  structure* (PNAS). Data repo:
+  structure* (PNAS). Data repo (MIT license):
   <https://github.com/bretthollenbeck/fake-reviews-data>
-  _(File format & license confirmed before the loader is written — see Step 5.)_
+- **Steam reviews (self-collected)** — Valve Corporation, Steamworks Web API:
+  user reviews (`store.steampowered.com/appreviews/{appid}`) and app metadata
+  (`store.steampowered.com/api/appdetails`). Public endpoints; collected politely
+  via `src/steam_collector.py`.
 
 ---
 
 ## Status
 
-Scaffolding in progress; built incrementally against a stepwise execution
-protocol. See `ANALYSIS_PLAN.md` for the rubric map and current step.
+Pipeline complete and tested (**41 passing tests**; reproducible Python 3.14
+env via `requirements.lock`). Notebooks 01–09 are executed with real results
+**across two platforms** — Amazon Reviews 2023 (downloaded) + **self-collected
+Steam** (public API) — and validated against real fake-review labels. See
+`ANALYSIS_PLAN.md` for the rubric map.
 
 ## License
 

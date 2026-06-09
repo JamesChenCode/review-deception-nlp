@@ -10,14 +10,14 @@ ledger**. Keep this in sync as notebooks/modules land.
 
 | Rubric criterion | Where it's addressed | Status |
 |---|---|---|
-| **Publication-worthy research question** | `README.md` (primary + validation-layer questions); narrative carried in `notebooks/08_story` | scaffolded |
-| **Extraordinarily complex data collection** (scraped / textual / multi-source / joined) | `src/scrape.py` (robust polite scraper: caching, checkpointing, backoff, UA rotation) + `src/fallback_loader.py` (research-dataset path) + **product-metadata join** (2nd source) → `notebooks/01_collection` | scaffolded |
-| **Insightful, labeled visualizations** | `src/viz.py` (consistent labeled house style) used across `notebooks/02`–`08`; geo in `src/geo.py` | scaffolded |
-| **Broad range of in-scope techniques, applied correctly** | see the technique ledger (§3) — spread across `features.py`, `models.py`, `network.py`, `geo.py` | scaffolded |
-| **Compelling narrative thread** | notebooks are numbered *chapters*; `08_story` assembles the arc | scaffolded |
-| **Real-world impact** | trust-classifier that flags reviews the platform's own flag misses; Step-5 reality check on the proxy → `notebooks/04`, `07` | scaffolded |
-| **Honest treatment of weak proxy** | proxy caveat restated in `README.md`, every label-touching docstring, and `notebooks/07_groundtruth_validation` | scaffolded |
-| **Poster + 3-min talk** | distilled from `notebooks/08_story` (figures exported via `src/viz.py`) | pending |
+| **Publication-worthy research question** | `README.md` (primary + validation + cross-platform questions); narrative in `notebooks/08_story` | ✅ done |
+| **Extraordinarily complex data collection** (scraped / textual / multi-source / joined) | **Self-collected Steam reviews** via public API (`src/steam_collector.py`: cursor pagination, retry/backoff, gzip cache, checkpointing + `appdetails` metadata join) → `notebooks/09`; Amazon Reviews 2023 loader + product-metadata join (`src/fallback_loader.py`) → `notebooks/01`; robust Amazon scraper built but blocked by Amazon's bot wall (`src/scrape.py`). **Three real sources, two platforms.** | ✅ done |
+| **Insightful, labeled visualizations** | `src/viz.py` (consistent labeled house style) across `notebooks/02`–`09`; figures exported to `reports/figures/` | ✅ done |
+| **Broad range of in-scope techniques, applied correctly** | see the technique ledger (§3) — `features.py`, `models.py`, `network.py` | ✅ done |
+| **Compelling narrative thread** | numbered chapters; `08_story` assembles the arc; `09` adds the cross-platform twist | ✅ done |
+| **Real-world impact** | trust classifier flags reviews the platform's flag misses; reality check on the proxy → `notebooks/04`, `07`, `09` | ✅ done |
+| **Honest treatment of weak proxy** | caveat restated in `README.md`, every label-touching docstring, `notebooks/07` + `09` (free-game confound, label circularity) | ✅ done |
+| **Poster + 3-min talk** | distilled from `notebooks/08_story` + `reports/figures/` | pending (human) |
 
 ---
 
@@ -30,8 +30,9 @@ ledger**. Keep this in sync as notebooks/modules land.
 | **3** | `clean.py` + `features.py` + `tests/` | ✅ done |
 | **4** | `models.py` + `viz.py` + `network.py` + notebook chapter stubs (01–08) | ✅ done |
 | **5** | `groundtruth_loader.py` + `notebooks/07` proxy-vs-real-label validation (real data downloaded, MIT) | ✅ done |
+| **+** | Notebooks 01–09 filled & **executed** with real results; `<br>`-tag cleaning fix; **self-collected Steam** source (`src/steam_collector.py`) + `notebooks/09` cross-platform; `reports/` figures + rendered HTML | ✅ done |
 
-> **Env:** Python 3.14 venv; pins bumped to the 3.14 wheel line (`requirements.lock` is the exact set). Test suite: 34 passing.
+> **Env:** Python 3.14 venv; pins bumped to the 3.14 wheel line (`requirements.lock` is the exact set). Test suite: **41 passing**.
 
 > **Guardrails:** stop and ask before any real scraping beyond a ≤5-product
 > dry run, before downloading external datasets (state filename + source + size
@@ -60,7 +61,8 @@ Only techniques the course covered are used. Each maps to a planned home.
 | Cross-validation | `models.py` | honest performance |
 | Grid search | `models.py` | hyperparameter tuning |
 | Ensemble (random forest) | `models.py` | main classifier + importances |
-| Combining data / joins | `fallback_loader.py`, `clean.py` | multi-source enrichment |
+| Combining data / joins | `fallback_loader.py`, `steam_collector.py`, `clean.py` | multi-source enrichment (review + metadata) |
+| API data collection (self-collected) | `steam_collector.py` | cross-platform Steam dataset (`notebooks/09`) |
 | Geospatial (choropleth / heatmap) | `geo.py` | *optional*, if location obtainable |
 | Network / graph (unsupervised) | `network.py` | suspicious-product clusters |
 
@@ -80,5 +82,11 @@ features engineered in `features.py`:
 - **helpful-vote ratios**,
 - **reviewer history breadth** (how many distinct products/categories).
 
-Step 5 reports which of these survive against the real fake-review label and
-which only correlated with purchase-verification.
+On **Steam** the self-collected API adds even richer per-author behavior —
+**playtime**, global **review count**, **games owned**, `weighted_vote_score`
+(wired into the feature matrix when present). `notebooks/09` shows
+`author_playtime_forever` is the top predictor of an unverified Steam review.
+
+`notebooks/07` (ground truth) and `notebooks/09` (cross-platform) report which
+of these signals survive the real fake-review label / a second platform, and
+which only correlate with purchase-verification.
